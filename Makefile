@@ -74,7 +74,7 @@ build: ## Build ansible-operator
 	@mkdir -p $(BUILD_DIR)
 	go build $(GO_BUILD_ARGS) -o $(BUILD_DIR) ./cmd/ansible-operator
 
-.PHONY: build/ansible-operator 
+.PHONY: build/ansible-operator
 build/ansible-operator:
 	go build $(GO_BUILD_ARGS) -o $(BUILD_DIR)/$(@F) ./cmd/$(@F)
 

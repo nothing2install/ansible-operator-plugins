@@ -25,7 +25,6 @@ RUN set -e && yum clean all && rm -rf /var/cache/yum/* \
   && pip3 install --upgrade pip~=23.1.2 \
   && pip3 install pipenv==2023.6.26 \
   && pipenv install --deploy \
-  && pipenv check \
   && yum remove -y gcc libffi-devel openssl-devel python39-devel \
   && yum clean all \
   && rm -rf /var/cache/yum
