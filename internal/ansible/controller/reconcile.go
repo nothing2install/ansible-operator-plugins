@@ -242,7 +242,7 @@ func (r *AnsibleOperatorReconciler) Reconcile(ctx context.Context, request recon
 
 	// We only want to update the CustomResource once, so we'll track changes
 	// and do it at the end
-	runSuccessful := len(failureMessages) == 0
+	runSuccessful := len(statusEvent.EventData.Failures) == 0
 
 	recentlyDeleted := u.GetDeletionTimestamp() != nil
 
