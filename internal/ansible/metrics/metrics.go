@@ -19,6 +19,7 @@ import (
 	"fmt"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"golang.org/x/exp/maps"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 
@@ -109,7 +110,9 @@ type UserMetricGauge struct {
 }
 
 type UserMetricHistogram struct {
-	Observe float64 `json:"observe,omitempty" yaml:"observe,omitempty"`
+	Observe float64           `json:"observe,omitempty" yaml:"observe,omitempty"`
+	Labels  map[string]string `json:"labels,omitempty" yaml:"labels,omitempty"`
+	Buckets []float64         `json:"buckets,omitempty" yaml:"buckets,omitempty"`
 }
 
 type UserMetricSummary struct {
@@ -185,6 +188,17 @@ func handleSummaryOrHistogram(metricSpec UserMetric, summary prometheus.Summary)
 	return nil
 }
 
+func handleSummaryOrHistogramVec(metricSpec UserMetric, histvec *prometheus.HistogramVec) error {
+	if metricSpec.Histogram == nil {
+		return fmt.Errorf("cannot change metric type of %s, which is a histogramVec or summary", metricSpec.Name)
+	}
+
+	if metricSpec.Histogram != nil {
+		histvec.With(metricSpec.Histogram.Labels).Observe(metricSpec.Histogram.Observe)
+	}
+	return nil
+}
+
 func ensureMetric(r prometheus.Registerer, metricSpec UserMetric) {
 	if _, ok := userMetrics[metricSpec.Name]; !ok {
 		// This is the first time we've seen this metric
@@ -202,10 +216,18 @@ func ensureMetric(r prometheus.Registerer, metricSpec UserMetric) {
 			})
 		}
 		if metricSpec.Histogram != nil {
-			userMetrics[metricSpec.Name] = prometheus.NewHistogram(prometheus.HistogramOpts{
-				Name: metricSpec.Name,
-				Help: metricSpec.Help,
-			})
+			buckets := prometheus.ExponentialBuckets(2, 2, 10)
+			if metricSpec.Histogram.Buckets != nil {
+				buckets = metricSpec.Histogram.Buckets
+			}
+
+			userMetrics[metricSpec.Name] = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+				Name:    metricSpec.Name,
+				Help:    metricSpec.Help,
+				Buckets: buckets,
+			},
+				maps.Keys(metricSpec.Histogram.Labels),
+			)
 		}
 		if metricSpec.Summary != nil {
 			userMetrics[metricSpec.Name] = prometheus.NewSummary(prometheus.SummaryOpts{
@@ -240,6 +262,12 @@ func HandleUserMetric(r prometheus.Registerer, metricSpec UserMetric) error {
 		if err := handleSummaryOrHistogram(metricSpec, v); err != nil {
 			return err
 		}
+	case *prometheus.HistogramVec:
+		if err := handleSummaryOrHistogramVec(metricSpec, v); err != nil {
+			return err
+		}
+	default:
+		logf.Log.WithName("metrics").Error(fmt.Errorf("%v", r), "Unknown metric type")
 	}
 	return nil
 }
